@@ -2,7 +2,8 @@ managed implementation in class ZBP_R_RAP100_ATRAV582 unique;
 strict ( 2 );
 with draft;
 extensible;
-define behavior for ZR_RAP100_ATRAV582 alias ZrRap100Atrav582
+//define behavior for ZR_RAP100_ATRAV582 alias zrrap100atrav582
+define behavior for ZR_RAP100_ATRAV582 alias Travel
 persistent table zrap100_atrav582
 extensible
 draft table zrp100_atrv582_d
@@ -30,6 +31,8 @@ early numbering
   create;
   update;
   delete;
+
+  determination setStatusOpen on modify { create; }
 
   draft action Activate optimized;
   draft action Discard;

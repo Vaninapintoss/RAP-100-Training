@@ -1,12 +1,21 @@
 CLASS lhc_zr_rap100_atrav582 DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
+    CONSTANTS:
+      BEGIN OF travel_status,
+        open      TYPE c LENGTH 1 VALUE 'O', "open
+        accepted  TYPE c LENGTH 1 VALUE 'A', "accepted
+        cancelled TYPE c LENGTH 1 VALUE 'X', "cancelled
+      END OF travel_status.
+
     METHODS:
       get_global_authorizations FOR GLOBAL AUTHORIZATION
         IMPORTING
-        REQUEST requested_authorizations FOR ZrRap100Atrav582
+        REQUEST requested_authorizations FOR Travel
         RESULT result,
       earlynumbering_create FOR NUMBERING
-        IMPORTING entities FOR CREATE ZrRap100Atrav582.
+        IMPORTING entities FOR CREATE Travel,
+      setStatusOpen FOR DETERMINE ON MODIFY
+        IMPORTING keys FOR Travel~setStatusOpen.
 ENDCLASS.
 
 CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
@@ -24,7 +33,7 @@ CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
     " --- 2) Map entities that already contain a TravelID: these do not need numbering.
     "     We copy them into the mapped result so they pass through unchanged.
     LOOP AT entities INTO entity WHERE TravelID IS NOT INITIAL.
-      APPEND CORRESPONDING #( entity ) TO mapped-zrrap100atrav582.
+      APPEND CORRESPONDING #( entity ) TO mapped-Travel.
     ENDLOOP.
 
     " --- 3) Prepare a list with only entities that lack a TravelID.
@@ -52,11 +61,11 @@ CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
                             %key = entity-%key
                             %is_draft = entity-%is_draft
                             %msg = lx_number_ranges )
-                            TO reported-zrrap100atrav582.
+                            TO reported-Travel.
             APPEND VALUE #( %cid = entity-%cid
                             %key = entity-%key
                             %is_draft = entity-%is_draft )
-                            TO failed-zrrap100atrav582.
+                            TO failed-Travel.
           ENDLOOP.
           " --- 4.b) Exit the method after reporting failures from number range call.
           EXIT.
@@ -81,8 +90,30 @@ CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
       APPEND VALUE #( %cid = entity-%cid
                       %key = entity-%key
                       %is_draft = entity-%is_draft
-                      ) TO mapped-zrrap100atrav582.
+                      ) TO mapped-Travel.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD setStatusOpen.
+
+    READ ENTITIES OF ZR_RAP100_ATRAV582 IN LOCAL MODE
+    ENTITY Travel
+    FIELDS ( OverallStatus )
+    WITH CORRESPONDING #( keys )
+    RESULT DATA(travels)
+    FAILED DATA(read_failed).
+
+    DELETE travels WHERE OverallStatus IS NOT INITIAL.
+    CHECK travels IS NOT INITIAL.
+
+    MODIFY ENTITIES OF zr_rap100_atrav582 IN LOCAL MODE
+    ENTITY Travel
+    UPDATE SET FIELDS
+    WITH VALUE #( FOR Travel IN travels ( %tky      = Travel-%tky
+                                          overallstatus = travel_status-open ) )
+                                          REPORTED DATA(update_reported).
+    reported = CORRESPONDING #( DEEP update_reported ).
 
   ENDMETHOD.
 

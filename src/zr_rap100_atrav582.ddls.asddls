@@ -2,7 +2,7 @@
 @Metadata.allowExtensions: true
 @ObjectModel.sapObjectNodeType.name: 'ZRAP100_ATRAV582'
 @EndUserText.label: '###GENERATED Core Data Service Entity'
-define root view entity ZR_RAP100_ATRAV582
+define root view entity ZR_RAP100_ATRAV582 
   as select from zrap100_atrav582
   //  associations
   association [0..1] to /DMO/I_Agency            as _Agency        on $projection.AgencyID = _Agency.AgencyID
