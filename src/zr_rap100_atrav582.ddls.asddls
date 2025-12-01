@@ -29,9 +29,11 @@ define root view entity ZR_RAP100_ATRAV582
       overall_status        as OverallStatus,
       //    enabled handling of large objects
       @Semantics.largeObject: { mimeType: 'MimeType', //case sensitive
-                                fileName: 'FileName' , //case sensitive
-                                acceptableMimeTypes:['image/png','image/jpeg'],
-                                contentDispositionPreference: #ATTACHMENT  }
+                                fileName: 'Filename'  //case sensitive
+      //                                acceptableMimeTypes:['image/png','image/jpeg'],
+      //                                contentDispositionPreference: #ATTACHMENT  }
+      //                                contentDispositionPreference: #INLINE  }
+      }
       attachment            as Attachment,
       @Semantics.mimeType: true
       mime_type             as MimeType,
