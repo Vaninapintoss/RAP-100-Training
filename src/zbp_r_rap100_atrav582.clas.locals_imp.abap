@@ -12,15 +12,25 @@ CLASS lhc_zr_rap100_atrav582 DEFINITION INHERITING FROM cl_abap_behavior_handler
         IMPORTING
         REQUEST requested_authorizations FOR Travel
         RESULT result,
+
       earlynumbering_create FOR NUMBERING
         IMPORTING entities FOR CREATE Travel,
+
       setStatusOpen FOR DETERMINE ON MODIFY
-        IMPORTING keys FOR Travel~setStatusOpen.
+        IMPORTING keys FOR Travel~setStatusOpen,
+
+      validateCustomer FOR VALIDATE ON SAVE
+        IMPORTING keys FOR Travel~validateCustomer,
+
+      validateDates FOR VALIDATE ON SAVE
+        IMPORTING keys FOR Travel~validateDates.
 ENDCLASS.
 
 CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
+
   METHOD get_global_authorizations.
   ENDMETHOD.
+
   METHOD earlynumbering_create.
 
     " --- 1) Local variables: one holds a single entity, one holds the max travel id,
@@ -97,7 +107,7 @@ CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
 
   METHOD setStatusOpen.
 
-    READ ENTITIES OF ZR_RAP100_ATRAV582 IN LOCAL MODE
+    READ ENTITIES OF zr_rap100_atrav582 IN LOCAL MODE
     ENTITY Travel
     FIELDS ( OverallStatus )
     WITH CORRESPONDING #( keys )
@@ -115,6 +125,109 @@ CLASS lhc_zr_rap100_atrav582 IMPLEMENTATION.
                                           REPORTED DATA(update_reported).
     reported = CORRESPONDING #( DEEP update_reported ).
 
+  ENDMETHOD.
+
+  METHOD validateCustomer.
+
+    READ ENTITIES OF zr_rap100_atrav582 IN LOCAL MODE
+    ENTITY Travel
+    FIELDS ( CustomerID )
+    WITH CORRESPONDING #( keys )
+    RESULT DATA(travels).
+
+    DATA customers TYPE SORTED TABLE OF /dmo/customer WITH UNIQUE KEY customer_id.
+
+    customers = CORRESPONDING #( travels DISCARDING DUPLICATES MAPPING customer_id = customerID EXCEPT * ).
+    DELETE customers WHERE customer_id IS INITIAL.
+    IF customers IS NOT INITIAL.
+      SELECT FROM /dmo/customer FIELDS customer_id
+          FOR ALL ENTRIES IN @customers
+          WHERE customer_id = @customers-customer_id
+          INTO TABLE @DATA(valid_customers).
+    ENDIF.
+
+    LOOP AT travels INTO DATA(travel).
+      APPEND VALUE #( %tky = travel-%tky
+                      %state_area = 'VALIDATE_CUSTOMER'
+                    ) TO reported-travel.
+
+      IF travel-CustomerID IS INITIAL.
+        APPEND VALUE #( %tky = travel-%tky ) TO failed-travel.
+
+        APPEND VALUE #( %tky = travel-%tky
+                        %state_area = 'VALIDATE_CUSTOMER'
+                        %msg = NEW /dmo/cm_flight_messages(
+                                textid = /dmo/cm_flight_messages=>enter_customer_id
+                                severity = if_abap_behv_message=>severity-error )
+                        %element-CustomerID = if_abap_behv=>mk-on
+        ) TO reported-travel.
+
+      ELSEIF travel-CustomerID IS NOT INITIAL AND NOT line_exists( valid_customers[ customer_id = travel-CustomerID ] ).
+        APPEND VALUE #( %tky = travel-%tky ) TO failed-travel.
+
+        APPEND VALUE #( %tky = travel-%tky
+                        %state_area = 'VALIDATE_CUSTOMER'
+                        %msg = NEW /dmo/cm_flight_messages(
+                                textid = /dmo/cm_flight_messages=>customer_unkown
+                                severity = if_abap_behv_message=>severity-error
+                                customer_id = travel-CustomerID )
+                        %element-CustomerID = if_abap_behv=>mk-on
+                        ) TO reported-travel.
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD validateDates.
+
+    READ ENTITIES OF zr_rap100_atrav582 IN LOCAL MODE
+    ENTITY Travel
+    FIELDS ( BeginDate EndDate TravelID )
+    WITH CORRESPONDING #( keys )
+    RESULT DATA(travels).
+
+    LOOP AT travels INTO DATA(travel).
+      APPEND VALUE #( %tky = travel-%tky
+      %state_area = 'VALIDATE_DATES'
+      ) TO reported-travel.
+
+      IF travel-BeginDate IS INITIAL.
+        APPEND VALUE #( %tky = travel-%tky ) TO failed-travel.
+
+        APPEND VALUE #( %tky = travel-%tky
+                        %state_area = 'VALIDATE_DATES'
+                        %msg = NEW /dmo/cm_flight_messages( begin_date = travel-BeginDate
+                                                            textid = /dmo/cm_flight_messages=>begin_date_on_or_bef_sysdate
+                                                            severity = if_abap_behv_message=>severity-error )
+                        %element-BeginDate = if_abap_behv=>mk-on ) TO reported-travel.
+      ENDIF.
+
+      IF travel-EndDate IS INITIAL.
+        APPEND VALUE #( %tky = travel-%tky ) TO failed-travel.
+
+        APPEND VALUE #( %tky               = travel-%tky
+                        %state_area        = 'VALIDATE_DATES'
+                         %msg                = NEW /dmo/cm_flight_messages(
+                                                                textid   = /dmo/cm_flight_messages=>enter_end_date
+                                                               severity = if_abap_behv_message=>severity-error )
+                        %element-EndDate   = if_abap_behv=>mk-on ) TO reported-travel.
+      ENDIF.
+      IF travel-EndDate < travel-BeginDate AND travel-BeginDate IS NOT INITIAL
+                                           AND travel-EndDate IS NOT INITIAL.
+        APPEND VALUE #( %tky = travel-%tky ) TO failed-travel.
+
+        APPEND VALUE #( %tky               = travel-%tky
+                        %state_area        = 'VALIDATE_DATES'
+                        %msg               = NEW /dmo/cm_flight_messages(
+                                                                textid     = /dmo/cm_flight_messages=>begin_date_bef_end_date
+                                                                begin_date = travel-BeginDate
+                                                                end_date   = travel-EndDate
+                                                                severity   = if_abap_behv_message=>severity-error )
+                        %element-BeginDate = if_abap_behv=>mk-on
+                        %element-EndDate   = if_abap_behv=>mk-on ) TO reported-travel.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
 ENDCLASS.
